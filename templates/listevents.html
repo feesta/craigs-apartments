@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+
+{% block header %}
+list all events
+<script>
+$(function(){
+});
+</script>
+{% end %}
+
+{% block content %}
+    
+  {% for job in job_list %}
+<div class='job'>
+<div class='device_name'>{{ job['name'] }}</div>
+<div class='device_id'>{{ job['id'] }} <span class='job_remove'><a href='removeevent?job_id={{ job['id'] }}'>remove</a></span></div>
+<div class='device_url'>{{ job['kwargs']['device_url'] }}</div>
+<div class='device_type'>type: recurring transition</div>
+<div class='device_runs'>runs: {{ job['runs'] }}</div>
+<div class='device_date'>next run: {{ job['next_run_time'] }}</div>
+
+<div class='device_job'>
+    <div class='source_url'>source url: {{ job['kwargs']['url'] }}</div>
+    <div class='source_filetype'>file type: {{ job['kwargs']['file_type'] }}</div>
+
+    {% if job['kwargs']['file_type'] == 'json' %}
+
+    <div class='source_downloaddate'>download frequency:
+        {{ job['kwargs']['year'] }}-{{ job['kwargs']['month'] }}-{{ job['kwargs']['day'] }}
+        ({{ job['kwargs']['day_of_week'] }})
+        {{ job['kwargs']['hour'] }}:{{ job['kwargs']['minute'] }}:{{ job['kwargs']['second'] }}
+    </div>
+    <div class='source_fields'>start/end fields: {{ job['kwargs']['transition']['transition_start_field']  }} / {{ job['kwargs']['transition']['transition_end_field']  }}</div>
+    <div class='source_number'>start/end numbers: {{ job['kwargs']['transition']['transition_start_number']  }} / {{ job['kwargs']['transition']['transition_end_number']  }}</div>
+
+    {% elif job['kwargs']['file_type'] == 'csv' %}
+    <div class='source_interval'>interval: {{ job['kwargs']['interval'] }} seconds</div>
+    <div class='source_xy'>cell X/Y: {{ job['kwargs']['x_value'] }}/{{ job['kwargs']['y_value'] }}</div>
+    {% end %}
+</div> 
+</div>
+  {% end %}
+
+{% end %}
+
+{% block footer %}
+{% end %}

@@ -1,0 +1,199 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en-GB">
+<head>
+<title>Craig's Apartments</title>
+<link rel="stylesheet" href="/static/style.css" type="text/css" charset="utf-8" />
+<link rel="icon" type="image/ico" href="favicon.ico">
+
+<script src="http://code.jquery.com/jquery-1.10.1.min.js"></script>
+<script src="http://code.jquery.com/jquery-migrate-1.2.1.min.js"></script>
+
+<link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.6.4/leaflet.css" />
+<!--[if lte IE 8]>
+    <link rel="stylesheet" href="http://cdn.leafletjs.com/leaflet-0.6.4/leaflet.ie.css" />
+<![endif]-->
+
+<script src="http://cdn.leafletjs.com/leaflet-0.6.4/leaflet.js"></script>
+<script>
+var map, markers = {};
+var minTime = 999999999999999999,
+    rangeMinTime = minTime,
+    maxTime = 0,
+    rangeTime = 0,
+    minPrice = 9999999,
+    rangeMinPrice = minPrice,
+    maxPrice = 0,
+    rangeMaxPrice = maxPrice,
+    rangePrice = 0,
+    now = Math.ceil((new Date()).getTime() / 1000) + 8*60*60,
+    pageWidth = 0,
+    pageHeight = 0,
+    debounceFilter = 0;
+console.info('now', now);
+$(function() {
+    pageWidth = $(window).width();
+    pageHeight = $(window).height();
+    $("#map").css('height', pageHeight - 72);
+    map = L.map('map').setView([37.77, -122.42], 14);
+
+    // add an OpenStreetMap tile layer
+    //L.tileLayer('http://{s}.tile.osm.org/{z}/{x}/{y}.png', {
+    L.tileLayer('http://4.maps.nlp.nokia.com/maptile/2.1/maptile/cf7f6539c6/normal.day/{z}/{x}/{y}/256/png8?lg=ENG&app_id=SqE1xcSngCd3m4a1zEGb&token=r0sR1DzqDkS6sDnh902FWQ&xnlp=CL_JSMv2.5.2.0,SID_F1569B57-2185-4E98-A1BE-0D05D57D93B0', {
+        attribution: ''
+    }).addTo(map);
+
+    $.ajax({
+        url:'/list',
+        dataType:'json',
+        success: function(data){
+            console.info('got:', data);
+            for (d in data) {
+                var price = data[d]['price'];
+                var timestamp = data[d]['timestamp'];
+                maxTime = timestamp > maxTime ? timestamp : maxTime;
+                minTime = timestamp < minTime ? timestamp : minTime;
+                rangeMinTime = minTime;
+                maxPrice = price > maxPrice ? price : maxPrice;
+                minPrice = price < minPrice ? price : minPrice;
+                rangeMinPrice = minPrice;
+                rangeMaxPrice = maxPrice;
+            }
+            rangeTime = maxTime - minTime;
+            rangePrice = maxPrice - minPrice;
+            console.info('price', minPrice, maxPrice);
+            console.info('time', minTime, maxTime);
+            addMarkers(data);
+        }
+    });
+
+    $("#time_handle").on('mousedown', function() {
+        $("body").on('mousemove', function(evt) {
+            var ratio = evt.pageX / pageWidth;
+            rangeMinTime = maxTime - ratio * rangeTime ;
+            var time = readableSeconds(ratio * rangeTime);
+            $("#time_handle").css("left", evt.pageX).text(time);
+            filterMarkers();
+        });
+    });
+    $('body').on('mouseup', function() {
+        $("body").off("mousemove");
+    });
+    $("#price_handle_left").on('mousedown', function() {
+        $("body").on('mousemove', function(evt) {
+            //console.info(evt);
+            var ratio = evt.pageX / pageWidth;
+            rangeMinPrice = ratio * rangePrice;
+            var price = ">$" + Math.round(rangeMinPrice);
+            $("#price_handle_left").css("left", evt.pageX).text(price);
+            filterMarkers();
+        });
+    });
+    $("#price_handle_right").on('mousedown', function() {
+        $("body").on('mousemove', function(evt) {
+            //console.info(evt);
+            var ratio = evt.pageX / pageWidth;
+            rangeMaxPrice = ratio * rangePrice;
+            var price = "<$" + Math.round(rangeMaxPrice);
+            $("#price_handle_right").css("left", evt.pageX).text(price);
+            filterMarkers();
+        });
+    });
+
+});
+
+function filterMarkers() {
+    clearTimeout(debounceFilter);
+    debounceFilter = setTimeout(function() {
+        console.info(rangeMinTime);
+        for (m in markers) {
+            var mm = markers[m];
+            if (mm.price > rangeMinPrice && mm.price < rangeMaxPrice && mm.timestamp > rangeMinTime) {
+                //mm.marker.opacity = 1;
+                map.addLayer(mm.marker);
+                //console.info('show');
+            } else {
+                //mm.marker.opacity = 0;
+                map.removeLayer(mm.marker);
+                //console.info('hide', mm.price, rangeMinPrice, rangeMaxPrice, mm.timestamp, rangeMinTime);
+            } 
+        }
+    }, 20);
+}
+
+function addMarkers(data) {
+    for (var i = 0; i < data.length; i++) {
+        var item = data[i];
+        //console.info(item['timestamp']);
+        var html = "<div class='popup-container'><div><img class='popup-image' src='" + item.images.fullsize + "'></div><div><span class='popup-price'>$" + item.price + "</span>&nbsp;&nbsp;<span class='popup-time'>" + readableSeconds(now - item.timestamp) + " ago</span><br><a href='" + item.url + "'>" + item.title + "</a></div></div>"
+        marker = new L.marker([item.latlng.lat,item.latlng.lng], {
+                                icon: L.icon({
+                                    iconUrl:item.images.thumb,
+                                    iconSize:[50,50]
+                                     })
+                                 })
+                    .bindPopup(html, {maxWidth:500})
+                    .on('click', function(mm) {
+                        console.info(mm);
+                        mm.visited = 1;
+                        mm.target.setOpacity(.5);
+                    })
+                    .addTo(map);
+        markers[item.url] = {'marker':marker, 'price':item.price, 'timestamp':item.timestamp, 'visited':0};
+    }
+}
+
+
+function readableSeconds(s) {
+    if (s < 120) return Math.round(s) + "s";
+    else if (s < 60 * 60 * 2) return Math.round(s/60) + "m";
+    else if (s < 60 * 60 * 48) return Math.round(s/(60*60)) + "h";
+    else if (s < 60 * 60 * 24 * 14) return Math.round(s/(60*60*24)) + "d";
+    else if (s < 60 * 60 * 24 * 7 * 6) return Math.round(s/(60*60*24*7)) + "w";
+    else if (s < 60 * 60 * 24 * 30 * 12 * 2) return Math.round(s/(60*60*24*30)) + "m";
+    else return Math.round(s/(60*60*24*365)) + "y";
+}
+
+</script>
+<style>
+body {margin:0; padding:0;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+}
+a {text-decoration:none;}
+a:hover {text-decoration:underline;}
+#map {width:100%; height:700px; background-color:#999;}
+#time_slider {height:36px; width:100%; position:relative; text-align:center;}
+#price_slider {height:36px; width:100%; position:relative; text-align:center;}
+#time_handle {background-color:#fc0; top:0; right:0; position:absolute; height:36px; width:100px; cursor:w-resize;}
+#price_handle_left {background-color:#cf0; top:0; left:0; position:absolute; height:36px; width:120px; cursor:w-resize;}
+#price_handle_right {background-color:#cf0; top:0; right:0; position:absolute; height:36px; width:120px; cursor:w-resize;}
+.smaller {font-size:12px; font-weight:normal;}
+
+.popup-container {width:360px; font-family:'fontregular';}
+.popup-container > div {display:inline-block;}
+.popup-image {width:340px;}
+.popup-price {font-weight:bold; font-size:24px; color:#666; font-family:'fontbold'; }
+.popup-time {font-size:14px; color:#333;}
+
+</style>
+</head>
+<body>
+
+<div id="header">
+<div id="time_slider"><span class='smaller'>DRAG ORANGE TO FILTER BY TIME</span><div id='time_handle'>TIME</div></div>
+<div id="price_slider"><span class='smaller'>DRAG YELLOWS TO FILTER BY $$$$</span><div id='price_handle_left'>$$</div><div id='price_handle_right'>$$$</div></div>
+</div>
+
+<div id="content">
+    <div id="map" class="map"></div>
+</div>
+
+<div id="footer">
+</div>
+
+</body>
+</html>
